@@ -1,0 +1,43 @@
+String linkValidacion = "http://172.25.124.29:4200/activar?correo=" 
+        + destinatario + "&token=" + token;package edu.uaa.mx.data;
+
+import jakarta.mail.*;
+import jakarta.mail.internet.*;
+import java.util.Properties;
+
+public class EmailService {
+
+    private final String username = "ricardoalmada036@gmail.com";
+    private final String password = "awhf rbhe ohsw pbsb";
+
+    public void enviarCorreoValidacion(String destinatario, String token) throws Exception {
+
+        Properties props = new Properties();
+        props.put("mail.smtp.host","smtp.gmail.com");
+        props.put("mail.smtp.port","587");
+        props.put("mail.smtp.auth","true");
+        props.put("mail.smtp.starttls.enable","true");
+
+        Session session = Session.getInstance(props, new Authenticator(){
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication(){
+                return new PasswordAuthentication(username, password);
+            }
+        });
+
+        String linkValidacion = "https://172.25.124.29:8443/usuarios/validar?correo=" 
+                + destinatario + "&token=" + token;
+
+        Message msg = new MimeMessage(session);
+        msg.setFrom(new InternetAddress(username));
+        msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(destinatario));
+        msg.setSubject("Valida tu correo");
+
+        String cuerpo = "Hola, valida tu correo dando clic en el siguiente enlace:\n\n"
+                + linkValidacion
+                + "\n\nSi no solicitaste esto, ignora el mensaje.";
+
+        msg.setText(cuerpo);
+        Transport.send(msg);
+    }
+}

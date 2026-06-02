@@ -1,0 +1,87 @@
+
+// Importamos tu modelo
+import mx.edu.uaa.model.Usuario; 
+
+import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
+import org.glassfish.jersey.media.multipart.FormDataParam;
+
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.*;
+
+@Path("/usuarios")
+public class UsuarioResource {
+
+    private static final String RUTA_BASE = "/home/vboxuser/marvinBeak/usuarios";
+
+    @POST
+    @Path("/registro")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response registroUsuario(
+            @FormDataParam("nombre") String nombre,
+            @FormDataParam("correo") String correo,
+            @FormDataParam("password") String password,
+	    @FormDataParam("idUsuario") Integer idUsuario,
+	    @FormDataParam("rol") String rol,
+	    @FormDataParam("isAdmin") Boolean isAdmin,
+	    @FormDataParam("foto") InputStream fotoStream,
+            @FormDataParam("foto") FormDataContentDisposition fotoDetalles) {
+
+        // Empaquetamos los datos recibidos en un Objeto Usuario
+        Usuario nuevoUsuario = new Usuario();
+        nuevoUsuario.setNombre(nombre);
+        nuevoUsuario.setCorreo(correo);
+        nuevoUsuario.setPassword(password);
+	nuevoUsuario.setIdUsuario(idUsuario);
+	nuevoUsuario.setRol(rol);
+	nuevoUsuario.setAdmin(isAdmin != null ? isAdmin : false);
+        String rutaCarpetaUsuario = RUTA_BASE + nuevoUsuario.getCorreo() + "/";
+        File directorio = new File(rutaCarpetaUsuario);
+        if (!directorio.exists()) {
+            directorio.mkdirs();
+        }
+
+        try {
+            guardarDatosUsuario(nuevoUsuario, rutaCarpetaUsuario);
+
+            // 3. Guardar foto
+            if (fotoStream != null && fotoDetalles.getFileName() != null) {
+                String nombreFoto = "foto_perfil.jpg";
+                guardarArchivoFisico(fotoStream, rutaCarpetaUsuario + nombreFoto);
+            }
+
+            return Response.ok("Usuario " + nuevoUsuario.getNombre() + " registrado.").build();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return Response.serverError().entity("Error: " + e.getMessage()).build();
+        }
+    }
+
+    // --- MÉTODOS AUXILIARES ---
+
+    // Ahora este método recibe un objeto 'Usuario' en lugar de strings sueltos
+    private void guardarDatosUsuario(Usuario usuario, String rutaDestino) throws IOException {
+        String contenido = "Nombre: " + usuario.getNombre() + "\n" +
+                           "Correo: " + usuario.getCorreo() + "\n" +
+                           "Password: " + usuario.getPassword() + "\n";
+
+        File archivo = new File(rutaDestino + "datos.txt");
+        try (FileWriter writer = new FileWriter(archivo)) {
+            writer.write(contenido);
+        }
+    }
+
+    private void guardarArchivoFisico(InputStream uploadedInputStream, String rutaCompletaArchivo) throws IOException {
+        File file = new File(rutaCompletaArchivo);
+        try (OutputStream out = new FileOutputStream(file)) {
+            int read;
+            byte[] bytes = new byte[1024];
+            while ((read = uploadedInputStream.read(bytes)) != -1) {
+                out.write(bytes, 0, read);
+            }
+            out.flush();
+        }
+    }
+}
