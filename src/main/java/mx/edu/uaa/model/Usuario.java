@@ -40,7 +40,8 @@ public class Usuario {
     @Column(name = "id_departamento")
     private Integer idDepartamento; // Solo para Profesores
 
-    @Column(name = "foto_ruta")
+    @Lob
+    @Column(name = "foto_ruta", columnDefinition = "LONGTEXT")
     private String fotoRuta;
 
     @Column(name = "es_google")
