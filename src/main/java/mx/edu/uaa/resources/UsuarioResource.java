@@ -231,27 +231,40 @@ u.setIntereses(listaIntereses);
     }
     
     // 5. LOGIN NORMAL
-    @POST
+   @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response iniciarSesion(@FormParam("correo") String correo, @FormParam("password") String password) {
+    public Response login(@FormParam("correo") String correo, @FormParam("password") String password) {
         try {
-            Usuario u = usuarioRepo.obtenerPorCorreo(correo);
-
-            if (u != null && u.getPassword().equals(password)) {
-                if (!u.isCorreoValidado()) {
-                    return Response.status(Response.Status.UNAUTHORIZED).entity("{\"message\": \"Debes verificar tu correo\"}").build();
-                }
-                return Response.ok(u).build();
-            } else {
-                return Response.status(Response.Status.UNAUTHORIZED).entity("{\"message\": \"Credenciales incorrectas\"}").build();
+            // 1. Buscamos al usuario por su correo
+            Usuario usuario = usuarioRepository.findByCorreo(correo);
+            
+            // Si el usuario no existe, rechazamos
+            if (usuario == null) {
+                return Response.status(Response.Status.UNAUTHORIZED)
+                            .entity("{\"message\": \"Credenciales incorrectas\"}").build();
             }
+
+            // 2. AQUÍ ESTÁ LA MAGIA: Comparamos la contraseña plana con la encriptada
+            // Dependiendo de la librería que uses (como jBCrypt), debes usar su método de verificación.
+            // NO USES: if (password.equals(usuario.getPassword()))
+            
+            boolean passwordCorrecta = org.mindrot.jbcrypt.BCrypt.checkpw(password, usuario.getPassword());
+            
+            if (!passwordCorrecta) {
+                return Response.status(Response.Status.UNAUTHORIZED)
+                            .entity("{\"message\": \"Credenciales incorrectas\"}").build();
+            }
+
+            // 3. Si todo está bien, devuelves el usuario
+            return Response.ok(usuario).build();
+
         } catch (Exception e) {
-            return Response.serverError().entity("{\"message\": \"Error servidor\"}").build();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
         }
-    }
-	// ==========================================
+    }	
+    // ==========================================
     // ACTUALIZAR USUARIO (PUT)
     // ==========================================
     @PUT
