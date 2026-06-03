@@ -23,8 +23,7 @@ public class PublicacionRepository {
     // ==========================================
     // CONEXIÓN A MONGODB (EL NODO 2)
     // ==========================================
-    // SUSTITUYE LAS 'XX' POR LA IP DE ZEROTIER DE TU NODO 2
-    private static final String URI_MONGODB = "mongodb://172.25.124.XX:27017"; 
+    private static final String URI_MONGODB = "mongodb:// 172.25.219.232:27017"; 
     
     private static final MongoClient mongoClient = MongoClients.create(URI_MONGODB);
     private static final MongoDatabase database = mongoClient.getDatabase("socialnet_db");
