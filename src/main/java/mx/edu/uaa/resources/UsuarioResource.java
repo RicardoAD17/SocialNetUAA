@@ -124,8 +124,9 @@ public Response iniciarRegistro(
             Usuario u = new Usuario();
             u.setNombre(nombre);
             u.setCorreo(correo);
-            u.setPassword(password);
             u.setCorreoValidado(true);
+            String passwordEncriptada = org.mindrot.jbcrypt.BCrypt.hashpw(password, org.mindrot.jbcrypt.BCrypt.gensalt());
+            u.setPassword(passwordEncriptada);
 		List<Integer> listaIntereses = new ArrayList<>();
 if (bodyParts != null) {
     for (FormDataBodyPart part : bodyParts) {
@@ -248,8 +249,7 @@ u.setIntereses(listaIntereses);
             }
 
             // 2. Comparamos la contraseña en texto plano (ya que no la estás encriptando en el registro)
-            boolean passwordCorrecta = password.equals(usuario.getPassword());
-            
+            boolean passwordCorrecta = org.mindrot.jbcrypt.BCrypt.checkpw(password, usuario.getPassword());
             if (!passwordCorrecta) {
                 return Response.status(Response.Status.UNAUTHORIZED)
                             .entity("{\"message\": \"Credenciales incorrectas\"}").build();
