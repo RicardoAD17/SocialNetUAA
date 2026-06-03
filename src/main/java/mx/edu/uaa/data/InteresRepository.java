@@ -1,45 +1,67 @@
 package mx.edu.uaa.data;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 import mx.edu.uaa.model.Interes;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class InteresRepository {
-    private static final String RUTA = "/home/vboxuser/marvinBeak/Catalogos/intereses.json";
-    private static final ObjectMapper mapper = new ObjectMapper();
+    
+    // Conexión a la unidad de persistencia en persistence.xml
+    private static final EntityManagerFactory emf = Persistence.createEntityManagerFactory("SocialNetPU");
 
-    public List<Interes> obtenerTodos() throws IOException {
-        File file = new File(RUTA);
-        if (!file.exists() || file.length() == 0) return new ArrayList<>();
-        return mapper.readValue(file, new TypeReference<List<Interes>>() {});
+    public List<Interes> obtenerTodos() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT i FROM Interes i", Interes.class).getResultList();
+        } finally {
+            em.close();
+        }
     }
 
-    public Interes guardar(Interes interes) throws IOException {
-        File file = new File(RUTA);
-        List<Interes> lista = obtenerTodos();
-        
-        if (!file.exists() && file.getParentFile() != null) file.getParentFile().mkdirs();
-
-        int nuevoId = lista.stream().mapToInt(Interes::getIdInteres).max().orElse(0) + 1;
-        interes.setIdInteres(nuevoId);
-        lista.add(interes);
-
-        mapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-        return interes;
+    public Interes guardar(Interes interes) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            // Si el ID es nulo o 0, insertamos un registro nuevo
+            if (interes.getIdInteres() == null || interes.getIdInteres() == 0) {
+                em.persist(interes);
+            } else {
+                // Si ya existe, lo actualizamos
+                interes = em.merge(interes);
+            }
+            
+            em.getTransaction().commit();
+            return interes;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
     }
     
-    // Método para obtener los nombres dado una lista de IDs (Útil para mostrar en el feed)
-    public List<Interes> obtenerPorListaIds(List<Integer> idsBuscados) throws IOException {
-        if (idsBuscados == null || idsBuscados.isEmpty()) return new ArrayList<>();
+    // Método optimizado para obtener los intereses dado una lista de IDs
+    public List<Interes> obtenerPorListaIds(List<Integer> idsBuscados) {
+        // Validación de seguridad para no mandar listas vacías a la BD
+        if (idsBuscados == null || idsBuscados.isEmpty()) {
+            return new ArrayList<>();
+        }
         
-        return obtenerTodos().stream()
-                .filter(i -> idsBuscados.contains(i.getIdInteres()))
-                .collect(Collectors.toList());
+        EntityManager em = emf.createEntityManager();
+        try {
+            // Utilizamos la cláusula IN de JPQL
+            return em.createQuery("SELECT i FROM Interes i WHERE i.idInteres IN :ids", Interes.class)
+                     .setParameter("ids", idsBuscados)
+                     .getResultList();
+        } finally {
+            em.close();
+        }
     }
 }

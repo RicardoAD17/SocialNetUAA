@@ -1,101 +1,133 @@
 package mx.edu.uaa.data;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
+import jakarta.persistence.NoResultException;
 import mx.edu.uaa.model.Usuario;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 public class UsuarioRepository {
 
-    private static final String RUTA_ARCHIVO = "/home/vboxuser/marvinBeak/Usuarios/usuarios.json";
-    private static final ObjectMapper jsonMapper = new ObjectMapper();
+    // Conexión a la unidad de persistencia en persistence.xml
+    private static final EntityManagerFactory emf = Persistence.createEntityManagerFactory("SocialNetPU");
 
     // --- OBTENER TODOS ---
-    public List<Usuario> obtenerTodos() throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        if (!file.exists() || file.length() == 0) {
-            return new ArrayList<>();
+    public List<Usuario> obtenerTodos() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT u FROM Usuario u", Usuario.class).getResultList();
+        } finally {
+            em.close();
         }
-        return jsonMapper.readValue(file, new TypeReference<List<Usuario>>() {});
     }
 
     // --- GUARDAR (Crear) ---
-    public synchronized void guardar(Usuario nuevoUsuario) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Usuario> usuarios = obtenerTodos();
-        
-        if (file.getParentFile() != null) file.getParentFile().mkdirs();
-
-        int nuevoId = 1;
-        if (!usuarios.isEmpty()) {
-            nuevoId = usuarios.stream()
-                    .mapToInt(u -> u.getIdUsuario() != null ? u.getIdUsuario() : 0)
-                    .max()
-                    .orElse(0) + 1;
+    public void guardar(Usuario nuevoUsuario) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            // Si es nulo o 0, es un INSERT
+            if (nuevoUsuario.getIdUsuario() == null || nuevoUsuario.getIdUsuario() == 0) {
+                em.persist(nuevoUsuario);
+            } else {
+                em.merge(nuevoUsuario);
+            }
+            
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
         }
-        nuevoUsuario.setIdUsuario(nuevoId);
-
-        usuarios.add(nuevoUsuario);
-        jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, usuarios);
     }
     
     // --- ACTUALIZAR ---
-    public synchronized void actualizar(Usuario usuarioEditado) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Usuario> lista = obtenerTodos();
-        boolean encontrado = false;
-
-        for (int i = 0; i < lista.size(); i++) {
-            if (lista.get(i).getIdUsuario().equals(usuarioEditado.getIdUsuario())) {
-                lista.set(i, usuarioEditado);
-                encontrado = true;
-                break;
+    public void actualizar(Usuario usuarioEditado) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            em.merge(usuarioEditado); // UPDATE automático en MySQL
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
             }
-        }
-        if (encontrado) {
-            jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
+            throw e;
+        } finally {
+            em.close();
         }
     }
 
     // --- ELIMINAR ---
-    public synchronized boolean eliminar(Integer id) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Usuario> lista = obtenerTodos();
-        boolean borrado = lista.removeIf(u -> u.getIdUsuario().equals(id));
-
-        if (borrado) {
-            jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
+    public boolean eliminar(Integer id) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            Usuario u = em.find(Usuario.class, id);
+            
+            if (u != null) {
+                em.remove(u);
+                em.getTransaction().commit();
+                return true;
+            }
+            em.getTransaction().commit();
+            return false;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            return false;
+        } finally {
+            em.close();
         }
-        return borrado;
     }
 
     // --- BUSCAR POR ID ---
-    public Usuario obtenerPorId(Integer id) throws IOException {
+    public Usuario obtenerPorId(Integer id) {
         if (id == null) return null;
-        return obtenerTodos().stream()
-                .filter(u -> u.getIdUsuario().equals(id))
-                .findFirst().orElse(null);
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.find(Usuario.class, id);
+        } finally {
+            em.close();
+        }
     }
     
     // --- BUSCAR POR CORREO ---
-    public Usuario obtenerPorCorreo(String correo) throws IOException {
+    public Usuario obtenerPorCorreo(String correo) {
         if (correo == null) return null;
-        return obtenerTodos().stream()
-                .filter(u -> u.getCorreo() != null && u.getCorreo().equalsIgnoreCase(correo))
-                .findFirst().orElse(null);
+        EntityManager em = emf.createEntityManager();
+        try {
+            // Buscamos ignorando mayúsculas/minúsculas directo en la base de datos
+            return em.createQuery("SELECT u FROM Usuario u WHERE LOWER(u.correo) = LOWER(:correo)", Usuario.class)
+                     .setParameter("correo", correo)
+                     .getSingleResult();
+        } catch (NoResultException e) {
+            return null; // Retorna null si no lo encuentra (igual que el .orElse(null) original)
+        } finally {
+            em.close();
+        }
     }
 
-    // --- BUSCAR POR NOMBRE (ESTE ES EL QUE TE FALTABA) ---
-    public Usuario obtenerPorNombre(String nombre) throws IOException {
+    // --- BUSCAR POR NOMBRE ---
+    public Usuario obtenerPorNombre(String nombre) {
         if (nombre == null) return null;
-        return obtenerTodos().stream()
-                // Busca ignorando mayúsculas/minúsculas
-                .filter(u -> u.getNombre() != null && u.getNombre().equalsIgnoreCase(nombre))
-                .findFirst()
-                .orElse(null);
+        EntityManager em = emf.createEntityManager();
+        try {
+            // Buscamos ignorando mayúsculas/minúsculas
+            return em.createQuery("SELECT u FROM Usuario u WHERE LOWER(u.nombre) = LOWER(:nombre)", Usuario.class)
+                     .setParameter("nombre", nombre)
+                     .getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        } finally {
+            em.close();
+        }
     }
 }

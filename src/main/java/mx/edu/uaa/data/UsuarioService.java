@@ -1,4 +1,4 @@
-package mx.edu.uaa.services;
+package mx.edu.uaa.data;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

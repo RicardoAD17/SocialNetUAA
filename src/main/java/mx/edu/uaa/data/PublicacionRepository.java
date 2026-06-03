@@ -1,120 +1,116 @@
 package mx.edu.uaa.data;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.result.DeleteResult;
 import mx.edu.uaa.model.Publicacion;
+import org.bson.Document;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class PublicacionRepository {
 
-    private static final String RUTA_ARCHIVO = "/home/vboxuser/marvinBeak/Publicaciones/publicaciones.json";
+    // ==========================================
+    // CONEXIÓN A MONGODB (EL NODO 2)
+    // ==========================================
+    // SUSTITUYE LAS 'XX' POR LA IP DE ZEROTIER DE TU NODO 2
+    private static final String URI_MONGODB = "mongodb://172.25.124.XX:27017"; 
+    
+    private static final MongoClient mongoClient = MongoClients.create(URI_MONGODB);
+    private static final MongoDatabase database = mongoClient.getDatabase("socialnet_db");
+    private static final MongoCollection<Document> collection = database.getCollection("publicaciones");
 
-    // Mapper configurado para manejar LocalDateTime
+    // Mapper configurado para manejar Fechas y para IGNORAR el "_id" propio de MongoDB
     private static final ObjectMapper jsonMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     // --- GUARDAR (CREAR) ---
-    public synchronized Publicacion guardar(Publicacion nuevaPublicacion) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Publicacion> publicaciones;
-
-        // Leer existentes o crear lista nueva
-        if (file.exists() && file.length() > 0) {
-            publicaciones = obtenerTodas();
-        } else {
-            publicaciones = new ArrayList<>();
-            // Crear carpeta si no existe
-            if (file.getParentFile() != null) {
-                file.getParentFile().mkdirs();
-            }
-        }
-
-        // Lógica ID Autoincrementable
-        int nuevoId = 1;
-        if (!publicaciones.isEmpty()) {
-            nuevoId = publicaciones.stream()
-                    .mapToInt(Publicacion::getIdPublicacion)
-                    .max()
-                    .orElse(0) + 1;
-        }
+    public Publicacion guardar(Publicacion nuevaPublicacion) throws Exception {
+        
+        // 1. Lógica ID Autoincrementable buscando el número mayor directamente en Mongo
+        Document maxDoc = collection.find().sort(new Document("idPublicacion", -1)).first();
+        int nuevoId = (maxDoc != null) ? maxDoc.getInteger("idPublicacion") + 1 : 1;
         nuevaPublicacion.setIdPublicacion(nuevoId);
 
-        // Guardar
-        publicaciones.add(nuevaPublicacion);
-        jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, publicaciones);
+        // 2. Convertir Objeto Java -> JSON String -> Documento BSON de Mongo
+        String json = jsonMapper.writeValueAsString(nuevaPublicacion);
+        Document doc = Document.parse(json);
+
+        // 3. Insertar en MongoDB
+        collection.insertOne(doc);
         
         return nuevaPublicacion;
     }
 
     // --- OBTENER TODAS ---
-    public List<Publicacion> obtenerTodas() throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        if (!file.exists() || file.length() == 0) {
-            return new ArrayList<>();
+    public List<Publicacion> obtenerTodas() throws Exception {
+        List<Publicacion> lista = new ArrayList<>();
+        
+        // Recorremos la colección de MongoDB
+        for (Document doc : collection.find()) {
+            // Documento BSON -> JSON String -> Objeto Java
+            Publicacion p = jsonMapper.readValue(doc.toJson(), Publicacion.class);
+            lista.add(p);
         }
-        return jsonMapper.readValue(file, new TypeReference<List<Publicacion>>() {});
+        return lista;
     }
 
     // --- OBTENER POR ID ---
-    public Publicacion obtenerPorId(int id) throws IOException {
-        List<Publicacion> lista = obtenerTodas();
-        return lista.stream()
-                .filter(p -> p.getIdPublicacion() == id)
-                .findFirst()
-                .orElse(null);
+    public Publicacion obtenerPorId(int id) throws Exception {
+        Document doc = collection.find(Filters.eq("idPublicacion", id)).first();
+        if (doc != null) {
+            return jsonMapper.readValue(doc.toJson(), Publicacion.class);
+        }
+        return null;
     }
 
-    // --- OBTENER POR EVENTO (Filtrar) ---
-    public List<Publicacion> obtenerPorEvento(Integer idEvento) throws IOException {
-        return obtenerTodas().stream()
-                .filter(p -> p.getIdEvento() != null && p.getIdEvento().equals(idEvento))
-                .collect(Collectors.toList());
+    // --- OBTENER POR EVENTO (Filtrar en Base de Datos) ---
+    public List<Publicacion> obtenerPorEvento(Integer idEvento) throws Exception {
+        List<Publicacion> lista = new ArrayList<>();
+        for (Document doc : collection.find(Filters.eq("idEvento", idEvento))) {
+            lista.add(jsonMapper.readValue(doc.toJson(), Publicacion.class));
+        }
+        return lista;
     }
 
-    // --- OBTENER POR INTERÉS (Filtrar) ---
-    public List<Publicacion> obtenerPorInteres(Integer idInteres) throws IOException {
-        return obtenerTodas().stream()
-                .filter(p -> p.getIntereses() != null && p.getIntereses().contains(idInteres))
-                .collect(Collectors.toList());
+    // --- OBTENER POR INTERÉS (Filtrar en Base de Datos) ---
+    public List<Publicacion> obtenerPorInteres(Integer idInteres) throws Exception {
+        List<Publicacion> lista = new ArrayList<>();
+        // Magia de MongoDB: Sabe buscar dentro de arreglos automáticamente
+        for (Document doc : collection.find(Filters.eq("intereses", idInteres))) {
+            lista.add(jsonMapper.readValue(doc.toJson(), Publicacion.class));
+        }
+        return lista;
     }
 
     // --- ACTUALIZAR ---
-    public synchronized void actualizar(Publicacion publicacionEditada) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Publicacion> lista = obtenerTodas();
+    public void actualizar(Publicacion publicacionEditada) throws Exception {
+        // Convertimos la nueva versión a Documento
+        String json = jsonMapper.writeValueAsString(publicacionEditada);
+        Document doc = Document.parse(json);
 
-        boolean encontrado = false;
-        for (int i = 0; i < lista.size(); i++) {
-            if (lista.get(i).getIdPublicacion() == publicacionEditada.getIdPublicacion()) {
-                lista.set(i, publicacionEditada); // Reemplazamos
-                encontrado = true;
-                break;
-            }
-        }
-
-        if (encontrado) {
-            jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-        }
+        // Reemplazamos el documento en Mongo que coincida con el idPublicacion
+        collection.replaceOne(Filters.eq("idPublicacion", publicacionEditada.getIdPublicacion()), doc);
     }
 
     // --- ELIMINAR ---
-    public synchronized boolean eliminar(int id) throws IOException {
-        File file = new File(RUTA_ARCHIVO);
-        List<Publicacion> lista = obtenerTodas();
-
-        boolean borrado = lista.removeIf(p -> p.getIdPublicacion() == id);
-
-        if (borrado) {
-            jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-        }
-        return borrado;
+    public boolean eliminar(int id) throws Exception {
+        // Ejecutamos el DELETE directamente en Mongo
+        DeleteResult result = collection.deleteOne(Filters.eq("idPublicacion", id));
+        
+        // Devuelve true si se eliminó al menos un registro
+        return result.getDeletedCount() > 0;
     }
 }

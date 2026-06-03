@@ -1,70 +1,93 @@
 package mx.edu.uaa.data;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 import mx.edu.uaa.model.Departamento;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class DepartamentoRepository {
-    private static final String RUTA = "/home/vboxuser/marvinBeak/Catalogos/departamentos.json";
-    private static final ObjectMapper mapper = new ObjectMapper();
+    
+    // Conexión a la unidad de persistencia definida en persistence.xml
+    private static final EntityManagerFactory emf = Persistence.createEntityManagerFactory("SocialNetPU");
 
-    public List<Departamento> obtenerTodos() throws IOException {
-        File file = new File(RUTA);
-        if (!file.exists() || file.length() == 0) return new ArrayList<>();
-        return mapper.readValue(file, new TypeReference<List<Departamento>>() {});
-    }
-
-    public List<Departamento> obtenerPorCentro(Integer idCentro) throws IOException {
-        return obtenerTodos().stream()
-                .filter(d -> d.getIdCentro().equals(idCentro))
-                .collect(Collectors.toList());
-    }
-
-
-public synchronized Departamento guardar(Departamento d) throws IOException {
-    File file = new File(RUTA);
-    List<Departamento> lista = obtenerTodos(); // Asegúrate de tener este método implementado
-
-    // Crear carpeta si no existe
-    if (!file.exists() && file.getParentFile() != null) {
-        file.getParentFile().mkdirs();
-    }
-
-    // --- AUTOINCREMENTO DEPARTAMENTO ---
-    // Cambiamos por Departamento::getIdDepartamento
-    int nuevoId = lista.stream()
-            .mapToInt(Departamento::getIdDepartamento)
-            .max()
-            .orElse(0) + 1;
-            
-    d.setIdDepartamento(nuevoId);
-    // -----------------------------------
-
-    lista.add(d);
-    mapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-    return d;
-}	
-	public Departamento obtenerPorId(Integer id) throws IOException {
-        return obtenerTodos().stream()
-                .filter(d -> d.getIdDepartamento().equals(id))
-                .findFirst()
-                .orElse(null);
-    }
-
-    public boolean eliminar(Integer id) throws IOException {
-        File file = new File(RUTA);
-        List<Departamento> lista = obtenerTodos();
-        
-        boolean borrado = lista.removeIf(d -> d.getIdDepartamento().equals(id));
-        
-        if (borrado) {
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
+    public List<Departamento> obtenerTodos() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT d FROM Departamento d", Departamento.class).getResultList();
+        } finally {
+            em.close();
         }
-        return borrado;
+    }
+
+    // Filtrado optimizado directamente en la base de datos
+    public List<Departamento> obtenerPorCentro(Integer idCentro) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT d FROM Departamento d WHERE d.idCentro = :idCentro", Departamento.class)
+                     .setParameter("idCentro", idCentro)
+                     .getResultList();
+        } finally {
+            em.close();
+        }
+    }
+
+    public Departamento guardar(Departamento d) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            // Si el ID es nulo o 0, es un registro nuevo (INSERT)
+            if (d.getIdDepartamento() == null || d.getIdDepartamento() == 0) {
+                em.persist(d);
+            } else {
+                // Si ya tiene ID, es una actualización (UPDATE)
+                d = em.merge(d);
+            }
+            
+            em.getTransaction().commit();
+            return d;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
+        }
+    }
+    
+    public Departamento obtenerPorId(Integer id) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.find(Departamento.class, id);
+        } finally {
+            em.close();
+        }
+    }
+
+    public boolean eliminar(Integer id) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            Departamento d = em.find(Departamento.class, id);
+            
+            if (d != null) {
+                em.remove(d);
+                em.getTransaction().commit();
+                return true;
+            }
+            
+            em.getTransaction().commit();
+            return false;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            return false;
+        } finally {
+            em.close();
+        }
     }
 }

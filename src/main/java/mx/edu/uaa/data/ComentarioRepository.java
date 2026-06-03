@@ -1,96 +1,103 @@
 package mx.edu.uaa.data;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 import mx.edu.uaa.model.Comentario;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ComentarioRepository {
 
-    private static final String RUTA = "/home/vboxuser/marvinBeak/Publicaciones/comentarios.json";
-    
-    private static final ObjectMapper jsonMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    // Conexión a la unidad de persistencia en persistence.xml
+    private static final EntityManagerFactory emf = Persistence.createEntityManagerFactory("SocialNetPU");
 
-    // --- GUARDAR (Con Autoincremento) ---
-    public synchronized Comentario guardar(Comentario c) throws IOException {
-        File file = new File(RUTA);
-        List<Comentario> lista;
-
-        if (file.exists() && file.length() > 0) {
-            lista = jsonMapper.readValue(file, new TypeReference<List<Comentario>>() {});
-        } else {
-            lista = new ArrayList<>();
-            if (file.getParentFile() != null) file.getParentFile().mkdirs();
+    // --- GUARDAR (Crear o Actualizar) ---
+    public Comentario guardar(Comentario c) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            
+            // Si el ID es nulo o 0, es un registro nuevo (INSERT)
+            if (c.getIdComentario() == null || c.getIdComentario() == 0) {
+                em.persist(c);
+            } else {
+                // Si ya tiene ID, es una actualización (UPDATE)
+                c = em.merge(c);
+            }
+            
+            em.getTransaction().commit();
+            return c;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            throw e;
+        } finally {
+            em.close();
         }
-
-        // Lógica de ID Autoincrementable
-        int nuevoId = lista.stream()
-                .mapToInt(Comentario::getIdComentario)
-                .max().orElse(0) + 1;
-        
-        c.setIdComentario(nuevoId);
-        
-        lista.add(c);
-        jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-        return c;
     }
 
     // --- OBTENER TODOS ---
-    public List<Comentario> obtenerTodos() throws IOException {
-        File file = new File(RUTA);
-        if (!file.exists() || file.length() == 0) return new ArrayList<>();
-        return jsonMapper.readValue(file, new TypeReference<List<Comentario>>() {});
+    public List<Comentario> obtenerTodos() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT c FROM Comentario c", Comentario.class).getResultList();
+        } finally {
+            em.close();
+        }
     }
 
-    // --- OBTENER POR PUBLICACIÓN (Filtrado) ---
-    public List<Comentario> obtenerPorPublicacion(Integer idPublicacion) throws IOException {
-        return obtenerTodos().stream()
-                .filter(c -> c.getIdPublicacion().equals(idPublicacion))
-                .collect(Collectors.toList());
+    // --- OBTENER POR PUBLICACIÓN (Filtrado directamente en la BD) ---
+    public List<Comentario> obtenerPorPublicacion(Integer idPublicacion) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.createQuery("SELECT c FROM Comentario c WHERE c.idPublicacion = :idPub", Comentario.class)
+                     .setParameter("idPub", idPublicacion)
+                     .getResultList();
+        } finally {
+            em.close();
+        }
     }
-// --- ELIMINAR (Desvinculando hijos en lugar de borrarlos) ---
-    public synchronized boolean eliminar(Integer id) throws IOException {
-        File file = new File(RUTA);
-        List<Comentario> lista = obtenerTodos();
 
-        boolean huboCambiosEnHijos = false;
+    // --- OBTENER POR ID ---
+    public Comentario obtenerPorId(Integer id) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            return em.find(Comentario.class, id);
+        } finally {
+            em.close();
+        }
+    }
 
-        // PASO 1: Buscar hijos y quitarles la referencia (Set null)
-        for (Comentario c : lista) {
-            // Verificamos si este comentario es respuesta del que vamos a borrar
-            if (c.getIdComentarioPadre() != null && c.getIdComentarioPadre().equals(id)) {
-                
-                c.setIdComentarioPadre(null); // Ahora es un comentario independiente
-                
-                huboCambiosEnHijos = true;
+    // --- ELIMINAR (Desvinculando hijos de forma óptima) ---
+    public boolean eliminar(Integer id) {
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+
+            // PASO 1: Buscar hijos y quitarles la referencia (JPQL Bulk Update)
+            // Esto le dice a MySQL que busque todos los comentarios que tengan este padre y los ponga en NULL
+            em.createQuery("UPDATE Comentario c SET c.idComentarioPadre = null WHERE c.idComentarioPadre = :padreId")
+              .setParameter("padreId", id)
+              .executeUpdate();
+
+            // PASO 2: Borrar SOLO el comentario objetivo
+            Comentario c = em.find(Comentario.class, id);
+            if (c != null) {
+                em.remove(c);
+                em.getTransaction().commit();
+                return true;
             }
+
+            em.getTransaction().commit();
+            return false;
+        } catch (Exception e) {
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            return false;
+        } finally {
+            em.close();
         }
-
-        // PASO 2: Borrar SOLO el comentario objetivo
-        boolean borrado = lista.removeIf(c -> c.getIdComentario().equals(id));
-
-        // PASO 3: Guardar si hubo cualquier cambio (ya sea borrado o actualización de hijos)
-        if (borrado || huboCambiosEnHijos) {
-            jsonMapper.writerWithDefaultPrettyPrinter().writeValue(file, lista);
-        }
-
-        return borrado;
-    }
-    
-    // Método auxiliar para buscar por ID (necesario para el Resource)
-    public Comentario obtenerPorId(Integer id) throws IOException {
-        return obtenerTodos().stream()
-                .filter(c -> c.getIdComentario().equals(id))
-                .findFirst()
-                .orElse(null);
     }
 }

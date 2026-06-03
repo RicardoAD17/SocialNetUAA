@@ -5,13 +5,11 @@ import java.util.List;
 import java.util.ArrayList;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+// ¡SIN ANOTACIONES JPA! Esta clase viaja directo a MongoDB
 public class Publicacion {
+
     private int idPublicacion;
-    
-    // --- CAMBIO: De int a Integer ---
     private Integer idEvento; 
-    // --------------------------------
-    
     private String titulo;
     private Integer idAutor;
 
@@ -26,6 +24,10 @@ public class Publicacion {
     private List<String> imagePaths;
     private List<Integer> idComentarios;
 
+    // ==========================================
+    // Constructores
+    // ==========================================
+
     public Publicacion() {
         this.createdAt = LocalDateTime.now();
         this.updateAt = LocalDateTime.now();
@@ -34,8 +36,7 @@ public class Publicacion {
         this.idComentarios = new ArrayList<>();
     }
 
-    // Actualiza el constructor también
-    public Publicacion(int idPublicacion, Integer idAutor, Integer idEvento, String titulo, // <--- Integer
+    public Publicacion(int idPublicacion, Integer idAutor, Integer idEvento, String titulo, 
                        String description, List<String> imagePaths,
                        List<Integer> idComentarios, List<Integer> intereses) {
         this.idPublicacion = idPublicacion;
@@ -50,33 +51,37 @@ public class Publicacion {
         this.updateAt = LocalDateTime.now();
     }
 
-    // --- GETTERS Y SETTERS ACTUALIZADOS ---
+    // ==========================================
+    // Getters y Setters
+    // ==========================================
 
-    public Integer getIdEvento() { // <--- Integer
-        return idEvento;
-    }
-
-    public void setIdEvento(Integer idEvento) { // <--- Integer
-        this.idEvento = idEvento;
-    }
-
-    // ... (El resto de getters y setters siguen igual) ...
     public int getIdPublicacion() { return idPublicacion; }
     public void setIdPublicacion(int idPublicacion) { this.idPublicacion = idPublicacion; }
+
+    public Integer getIdEvento() { return idEvento; }
+    public void setIdEvento(Integer idEvento) { this.idEvento = idEvento; }
+
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }
+
     public Integer getIdAutor() { return idAutor; }
     public void setIdAutor(Integer idAutor) { this.idAutor = idAutor; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
     public LocalDateTime getUpdateAt() { return updateAt; }
     public void setUpdateAt(LocalDateTime updateAt) { this.updateAt = updateAt; }
-    public List<Integer> getIntereses() { return intereses; }
-    public void setIntereses(List<Integer> intereses) { this.intereses = intereses; }
+
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public List<Integer> getIntereses() { return intereses; }
+    public void setIntereses(List<Integer> intereses) { this.intereses = intereses; }
+
     public List<String> getImagePaths() { return imagePaths; }
     public void setImagePaths(List<String> imagePaths) { this.imagePaths = imagePaths; }
+
     public List<Integer> getIdComentarios() { return idComentarios; }
     public void setIdComentarios(List<Integer> idComentarios) { this.idComentarios = idComentarios; }
 }
