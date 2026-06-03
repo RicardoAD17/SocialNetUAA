@@ -38,9 +38,9 @@ public Response iniciarRegistro(
     @FormParam("correo") String correo,
     @FormParam("captchaToken") String captchaToken // <--- RECIBE EL TOKEN
 ) {
-	if (!HCaptchaService.esValido(captchaToken)) {
-    return Response.status(400).entity("Error: Captcha inválido.").build();
-}
+	//if (!HCaptchaService.esValido(captchaToken)) {
+    //return Response.status(400).entity("Error: Captcha inválido.").build();
+    //}
 
         try {
             // Usamos el repositorio en vez de método local
