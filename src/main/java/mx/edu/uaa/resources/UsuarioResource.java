@@ -231,14 +231,15 @@ u.setIntereses(listaIntereses);
     }
     
     // 5. LOGIN NORMAL
-   @POST
+   // 5. LOGIN NORMAL
+    @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(@FormParam("correo") String correo, @FormParam("password") String password) {
         try {
-            // 1. Buscamos al usuario por su correo
-            Usuario usuario = usuarioRepository.findByCorreo(correo);
+            // 1. Buscamos al usuario usando tu variable y método correctos
+            Usuario usuario = usuarioRepo.obtenerPorCorreo(correo);
             
             // Si el usuario no existe, rechazamos
             if (usuario == null) {
@@ -246,11 +247,8 @@ u.setIntereses(listaIntereses);
                             .entity("{\"message\": \"Credenciales incorrectas\"}").build();
             }
 
-            // 2. AQUÍ ESTÁ LA MAGIA: Comparamos la contraseña plana con la encriptada
-            // Dependiendo de la librería que uses (como jBCrypt), debes usar su método de verificación.
-            // NO USES: if (password.equals(usuario.getPassword()))
-            
-            boolean passwordCorrecta = org.mindrot.jbcrypt.BCrypt.checkpw(password, usuario.getPassword());
+            // 2. Comparamos la contraseña en texto plano (ya que no la estás encriptando en el registro)
+            boolean passwordCorrecta = password.equals(usuario.getPassword());
             
             if (!passwordCorrecta) {
                 return Response.status(Response.Status.UNAUTHORIZED)
@@ -263,7 +261,7 @@ u.setIntereses(listaIntereses);
         } catch (Exception e) {
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
         }
-    }	
+    }
     // ==========================================
     // ACTUALIZAR USUARIO (PUT)
     // ==========================================
