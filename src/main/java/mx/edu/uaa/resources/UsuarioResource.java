@@ -254,7 +254,9 @@ u.setIntereses(listaIntereses);
                 return Response.status(Response.Status.UNAUTHORIZED)
                             .entity("{\"message\": \"Credenciales incorrectas\"}").build();
             }
-
+            // Le quitamos los intereses para que el convertidor JSON no intente leerlos y explote
+            usuario.setIntereses(null); 
+            // ---------------------------------
             // 3. Si todo está bien, devuelves el usuario
             return Response.ok(usuario).build();
 
