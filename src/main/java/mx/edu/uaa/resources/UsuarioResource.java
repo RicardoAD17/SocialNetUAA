@@ -359,7 +359,13 @@ public class UsuarioResource {
             }
 
             if (u != null) {
-                u.setPassword(null); 
+                u.setPassword(null); // Seguridad
+                
+                // --- ¡LA MAGIA AQUÍ! ---
+                // Evita que el convertidor JSON explote y lance el 400 Bad Request
+                u.setIntereses(null); 
+                // -----------------------
+                
                 return Response.ok(u).build();
             } else {
                 return Response.status(Response.Status.NOT_FOUND).build();
