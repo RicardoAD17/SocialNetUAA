@@ -1,18 +1,19 @@
 package mx.edu.uaa.model;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 // ¡SIN ANOTACIONES JPA! Esta clase viaja directo a MongoDB
 public class Publicacion {
 
     private int idPublicacion;
-    private Integer idEvento; 
+    private Integer idEvento;
     private String titulo;
     private Integer idAutor;
 
+    // Aquí está la magia: le decimos exactamente cómo viene el texto desde Mongo
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
@@ -36,7 +37,7 @@ public class Publicacion {
         this.idComentarios = new ArrayList<>();
     }
 
-    public Publicacion(int idPublicacion, Integer idAutor, Integer idEvento, String titulo, 
+    public Publicacion(int idPublicacion, Integer idAutor, Integer idEvento, String titulo,
                        String description, List<String> imagePaths,
                        List<Integer> idComentarios, List<Integer> intereses) {
         this.idPublicacion = idPublicacion;

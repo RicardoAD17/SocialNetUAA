@@ -44,10 +44,9 @@ public class Evento {
     @Column(name = "id_creador", nullable = false)
     private Integer idCreador;
 
-    // MAGIA JPA: Crea una tabla para la lista de rutas/nombres de imágenes
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER) // <-- ¡Solo agregas el parámetro fetch aquí!
     @CollectionTable(
-        name = "evento_imagenes", 
+        name = "evento_imagenes",
         joinColumns = @JoinColumn(name = "id_evento")
     )
     @Column(name = "ruta_imagen")
