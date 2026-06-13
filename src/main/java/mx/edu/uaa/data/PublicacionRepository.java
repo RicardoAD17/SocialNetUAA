@@ -6,6 +6,8 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.result.DeleteResult;
+
+import jakarta.validation.constraints.Pattern;
 import mx.edu.uaa.model.Publicacion;
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -85,11 +87,11 @@ public class PublicacionRepository {
     // --- OBTENER POR EVENTO ---
     public List<Publicacion> obtenerPorEvento(Integer idEvento) throws Exception {
         List<Publicacion> lista = new ArrayList<>();
-        for (Document doc : collection.find(Filters.eq("idEvento", idEvento))) {
+        for (Document doc : collection.find()) {
             try {
                 lista.add(mapearDocumentoAObjeto(doc));
             } catch (Exception e) {
-                System.err.println("⚠️ Error procesando la publicación en obtenerPorEvento.");
+                System.err.println(" Error procesando la publicación en obtenerPorEvento.");
             }
         }
         return lista;
@@ -99,11 +101,11 @@ public class PublicacionRepository {
     public List<Publicacion> obtenerPorInteres(Integer idInteres) throws Exception {
         List<Publicacion> lista = new ArrayList<>();
         // Magia de MongoDB: Sabe buscar dentro de arreglos automáticamente
-        for (Document doc : collection.find(Filters.eq("intereses", idInteres))) {
+        for (Document doc : collection.find()) {
             try {
                 lista.add(mapearDocumentoAObjeto(doc));
             } catch (Exception e) {
-                System.err.println("⚠️ Error procesando la publicación en obtenerPorInteres.");
+                System.err.println(" Error procesando la publicación en obtenerPorInteres.");
             }
         }
         return lista;
@@ -220,18 +222,17 @@ public class PublicacionRepository {
     public List<Publicacion> buscarPorTexto(String terminoBusqueda) throws Exception {
         List<Publicacion> lista = new ArrayList<>();
 
-        // 1. Usamos Filters.regex pasándole la "i" para ignorar mayúsculas y minúsculas
+        // La "i" al final le indica a MongoDB que ignore mayúsculas y minúsculas
         Bson filtro = Filters.or(
                 Filters.regex("titulo", terminoBusqueda, "i"),
                 Filters.regex("description", terminoBusqueda, "i")
         );
 
-        // 2. Ejecutamos la consulta
         for (Document doc : collection.find(filtro)) {
             try {
                 lista.add(mapearDocumentoAObjeto(doc));
             } catch (Exception e) {
-                System.err.println("⚠️ Error procesando la publicación en buscarPorTexto.");
+                System.err.println("Error procesando publicación: " + e.getMessage());
             }
         }
         return lista;
