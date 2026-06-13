@@ -142,24 +142,33 @@ public class PublicacionRepository {
     // ==========================================
     // MÉTODO AUXILIAR: Mapeo Manual Seguro
     // ==========================================
-    private Publicacion mapearDocumentoAObjeto(Document doc) {
+    // Método auxiliar para extraer números de forma segura
+    private Integer extraerEnteroSeguro(Document doc, String clave) {
+        Object valor = doc.get(clave);
+        if (valor == null) return null;
+        
+        // Si es un número (Integer, Double, Long, etc.), lo convertimos a Integer
+        if (valor instanceof Number) {
+            return ((Number) valor).intValue();
+        }
+        return null;
+    }
+   private Publicacion mapearDocumentoAObjeto(Document doc) {
         Publicacion p = new Publicacion();
 
-        // 1. Extraer ID de Mongo sin importar si es String u ObjectId
+        // 1. Extraer ID
         Object rawId = doc.get("_id");
-        if (rawId != null) {
-            p.setId(rawId.toString());
-        }
+        if (rawId != null) p.setId(rawId.toString());
 
-        // 2. Extraer tu idPublicacion asegurando que no explote si viene nulo
-        Integer idPub = doc.getInteger("idPublicacion");
-        p.setIdPublicacion(idPub != null ? idPub : 0);
-
-        p.setIdEvento(doc.getInteger("idEvento"));
+        // --- AQUÍ ESTÁ EL CAMBIO ---
+        // Usamos el extractor seguro que permite que venga como Double o Integer
+        p.setIdPublicacion(extraerEnteroSeguro(doc, "idPublicacion") != null ? extraerEnteroSeguro(doc, "idPublicacion") : 0);
+        p.setIdEvento(extraerEnteroSeguro(doc, "idEvento"));
+        p.setIdAutor(extraerEnteroSeguro(doc, "idAutor"));
+        
+        // El resto de tus campos (Strings, listas, fechas) se quedan igual
         p.setTitulo(doc.getString("titulo"));
-        p.setIdAutor(doc.getInteger("idAutor"));
         p.setDescription(doc.getString("description"));
-
         p.setIntereses(obtenerListaEnteros(doc, "intereses"));
         p.setIdComentarios(obtenerListaEnteros(doc, "idComentarios"));
 
