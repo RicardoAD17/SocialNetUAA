@@ -6,8 +6,6 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.result.DeleteResult;
-
-import jakarta.validation.constraints.Pattern;
 import mx.edu.uaa.model.Publicacion;
 import org.bson.Document;
 import org.bson.conversions.Bson;
