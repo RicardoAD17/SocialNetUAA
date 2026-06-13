@@ -8,6 +8,7 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.result.DeleteResult;
 import mx.edu.uaa.model.Publicacion;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -215,5 +216,26 @@ public class PublicacionRepository {
         
         // Fallback de seguridad
         return java.time.LocalDate.now();
+    }
+    // --- BUSCADOR DE TEXTO EN MONGODB ---
+// --- BUSCADOR DE TEXTO EN MONGODB ---
+    public List<Publicacion> buscarPorTexto(String terminoBusqueda) throws Exception {
+        List<Publicacion> lista = new ArrayList<>();
+
+        // 1. Usamos Filters.regex pasándole la "i" para ignorar mayúsculas y minúsculas
+        Bson filtro = Filters.or(
+                Filters.regex("titulo", terminoBusqueda, "i"),
+                Filters.regex("description", terminoBusqueda, "i")
+        );
+
+        // 2. Ejecutamos la consulta
+        for (Document doc : collection.find(filtro)) {
+            try {
+                lista.add(mapearDocumentoAObjeto(doc));
+            } catch (Exception e) {
+                System.err.println("⚠️ Error procesando la publicación en buscarPorTexto.");
+            }
+        }
+        return lista;
     }
 }

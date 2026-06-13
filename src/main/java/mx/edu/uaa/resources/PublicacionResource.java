@@ -133,11 +133,28 @@ public class PublicacionResource {
         }
     }
 
-    @GET
+   @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Response obtenerPublicaciones() {
+    public Response obtenerPublicaciones(
+            @QueryParam("idEvento") Integer idEvento,
+            @QueryParam("idInteres") List<Integer> idInteres,
+            @QueryParam("idUsuario") Integer idUsuario,
+            @QueryParam("busqueda") String busqueda // <--- 1. ATRAPAMOS EL TEXTO DE ANGULAR
+    ) {
         try {
-            List<Publicacion> resultados = repo.obtenerTodas();
+            List<Publicacion> resultados;
+
+            // 2. Evaluamos si el frontend mandó una búsqueda
+            if (busqueda != null && !busqueda.trim().isEmpty()) {
+                resultados = repo.buscarPorTexto(busqueda);
+            } 
+            // Tus otros filtros que ya tenías...
+            else if (idEvento != null) {
+                resultados = repo.obtenerPorEvento(idEvento);
+            } else {
+                resultados = repo.obtenerTodas();
+            }
+            
             return Response.ok(resultados).build();
         } catch (Exception e) {
             e.printStackTrace();
