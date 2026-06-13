@@ -1,24 +1,27 @@
 package mx.edu.uaa.model;
-
-import java.time.LocalDateTime;
+import org.springframework.data.annotation.Id;
+import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.LocalDate;
 
 // ¡SIN ANOTACIONES JPA! Esta clase viaja directo a MongoDB
 public class Publicacion {
-
-    private int idPublicacion;
+	@Id
+	private String id; // <-- CRÍTICO: Debe ser String para que soporte el "$oid" de Mongo
+	
+	private Integer idPublicacion;
     private Integer idEvento;
     private String titulo;
     private Integer idAutor;
 
-    // Aquí está la magia: le decimos exactamente cómo viene el texto desde Mongo
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime createdAt;
+    // Magia: Usamos LocalDate (Solo fecha) y el patrón exacto que dejaste en Mongo
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate createdAt;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime updateAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate updateAt;
 
     private List<Integer> intereses;
     private String description;
@@ -30,8 +33,9 @@ public class Publicacion {
     // ==========================================
 
     public Publicacion() {
-        this.createdAt = LocalDateTime.now();
-        this.updateAt = LocalDateTime.now();
+        // Ahora usamos LocalDate.now()
+        this.createdAt = LocalDate.now();
+        this.updateAt = LocalDate.now();
         this.imagePaths = new ArrayList<>();
         this.intereses = new ArrayList<>();
         this.idComentarios = new ArrayList<>();
@@ -48,14 +52,15 @@ public class Publicacion {
         this.intereses = intereses;
         this.imagePaths = imagePaths;
         this.idComentarios = idComentarios;
-        this.createdAt = LocalDateTime.now();
-        this.updateAt = LocalDateTime.now();
+        this.createdAt = LocalDate.now();
+        this.updateAt = LocalDate.now();
     }
 
     // ==========================================
     // Getters y Setters
     // ==========================================
-
+	public String getId() { return id; }
+	public void setId(String id) { this.id = id; }
     public int getIdPublicacion() { return idPublicacion; }
     public void setIdPublicacion(int idPublicacion) { this.idPublicacion = idPublicacion; }
 
@@ -68,11 +73,12 @@ public class Publicacion {
     public Integer getIdAutor() { return idAutor; }
     public void setIdAutor(Integer idAutor) { this.idAutor = idAutor; }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    // ¡Asegúrate de que los Getters y Setters también digan LocalDate!
+    public LocalDate getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDate createdAt) { this.createdAt = createdAt; }
 
-    public LocalDateTime getUpdateAt() { return updateAt; }
-    public void setUpdateAt(LocalDateTime updateAt) { this.updateAt = updateAt; }
+    public LocalDate getUpdateAt() { return updateAt; }
+    public void setUpdateAt(LocalDate updateAt) { this.updateAt = updateAt; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

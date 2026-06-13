@@ -1,5 +1,5 @@
 package mx.edu.uaa.model;
-
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.util.List;
 import java.util.ArrayList;
@@ -48,7 +48,8 @@ public class Usuario {
     private boolean esGoogle;
 
     // MAGIA JPA: Crea una tabla extra para guardar los múltiples intereses del usuario
-    @ElementCollection
+	@JsonIgnore // <--- Evita que Jackson se pelee con esta lista
+	@ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "usuario_intereses", 
         joinColumns = @JoinColumn(name = "id_usuario")

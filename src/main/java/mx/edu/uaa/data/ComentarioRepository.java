@@ -5,7 +5,8 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 import mx.edu.uaa.model.Comentario;
 import java.util.List;
-
+import org.springframework.stereotype.Repository;
+@Repository
 public class ComentarioRepository {
 
     // Conexión a la unidad de persistencia en persistence.xml

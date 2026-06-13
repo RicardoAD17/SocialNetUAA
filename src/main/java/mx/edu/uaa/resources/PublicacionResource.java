@@ -87,7 +87,7 @@ public class PublicacionResource {
 
             if (titulo != null && !titulo.isEmpty()) p.setTitulo(titulo);
             if (description != null) p.setDescription(description);
-            p.setUpdateAt(java.time.LocalDateTime.now());
+            p.setUpdateAt(java.time.LocalDate.now());
 
             if (fileMetaData != null && fileMetaData.getFileName() != null && !fileMetaData.getFileName().isEmpty()) {
                 String nombreOriginal = fileMetaData.getFileName().toLowerCase();
