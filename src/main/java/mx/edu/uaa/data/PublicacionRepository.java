@@ -9,7 +9,7 @@ import com.mongodb.client.result.DeleteResult;
 import mx.edu.uaa.model.Publicacion;
 import org.bson.Document;
 import org.bson.conversions.Bson;
-
+import com.mongodb.client.model.Sorts; // Agrega este import
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
@@ -64,16 +64,14 @@ public class PublicacionRepository {
     }
 
     // --- OBTENER TODAS ---
+    // Dentro de tu PublicacionRepository.jav
+
     public List<Publicacion> obtenerTodas() throws Exception {
         List<Publicacion> lista = new ArrayList<>();
-        // Recorremos la colección de MongoDB
-        for (Document doc : collection.find()) {
-            try {
-                lista.add(mapearDocumentoAObjeto(doc));
-            } catch (Exception e) {
-                // Si un documento está roto, no tira el servidor, solo avisa en consola
-                System.err.println("⚠️ Error procesando la publicación con ID Mongo: " + doc.get("_id"));
-            }
+        
+        // .sort(Sorts.descending("createdAt")) pone lo más nuevo al principio
+        for (Document doc : collection.find().sort(Sorts.descending("createdAt"))) {
+            lista.add(mapearDocumentoAObjeto(doc));
         }
         return lista;
     }
