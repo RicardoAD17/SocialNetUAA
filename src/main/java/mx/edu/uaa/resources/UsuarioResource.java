@@ -188,33 +188,34 @@ public class UsuarioResource {
     }
     
     // 5. LOGIN NORMAL
+    // 5. LOGIN NORMAL FRAGMENTADO
     @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(@FormParam("correo") String correo, @FormParam("password") String password) {
         try {
-            Usuario usuario = usuarioRepo.obtenerPorCorreo(correo);
+            // 1. Buscamos SOLO en la vista de autenticación (Súper rápido y seguro)
+            mx.edu.uaa.model.UsuarioAuth auth = usuarioRepo.buscarParaLogin(correo);
             
-            if (usuario == null) {
+            if (auth == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).entity("{\"message\": \"Credenciales incorrectas\"}").build();
             }
 
-            boolean passwordCorrecta = org.mindrot.jbcrypt.BCrypt.checkpw(password, usuario.getPassword());
+            // 2. Comparamos contraseñas
+            boolean passwordCorrecta = org.mindrot.jbcrypt.BCrypt.checkpw(password, auth.getPassword());
             if (!passwordCorrecta) {
                 return Response.status(Response.Status.UNAUTHORIZED).entity("{\"message\": \"Credenciales incorrectas\"}").build();
             }
             
-            usuario.setIntereses(null); 
-            usuario.setPassword(null);
-            
-            return Response.ok(usuario).build();
+            // 3. Si todo es correcto, devolvemos SOLO el perfil público (Sin contraseña, sin tokens)
+            mx.edu.uaa.model.UsuarioPerfil perfil = usuarioRepo.obtenerPerfilPublico(auth.getIdUsuario());
+            return Response.ok(perfil).build();
 
         } catch (Exception e) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"message\": \"Error interno\"}").build();
         }
     }
-
     // ==========================================
     // ACTUALIZAR USUARIO (PUT)
     // ==========================================
@@ -313,62 +314,56 @@ public class UsuarioResource {
     // ==========================================
     // OBTENER TODOS LOS USUARIOS (GET)
     // ==========================================
+    // ==========================================
+    // DIRECTORIO: ALUMNOS
+    // ==========================================
     @GET
+    @Path("/directorio/alumnos")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response obtenerUsuarios(@QueryParam("buscar") String textoBusqueda) {
+    public Response obtenerDirectorioAlumnos() {
         try {
-            List<Usuario> listaCompleta = usuarioRepo.obtenerTodos();
-            List<Usuario> resultado = new ArrayList<>();
-
-            for (Usuario u : listaCompleta) {
-                boolean coincide = true;
-                if (textoBusqueda != null && !textoBusqueda.isEmpty()) {
-                    String texto = textoBusqueda.toLowerCase();
-                    String nombre = u.getNombre() != null ? u.getNombre().toLowerCase() : "";
-                    String correo = u.getCorreo() != null ? u.getCorreo().toLowerCase() : "";
-                    
-                    if (!nombre.contains(texto) && !correo.contains(texto)) coincide = false;
-                }
-
-                if (coincide) {
-                    u.setPassword(null); 
-                    resultado.add(u);
-                }
-            }
-            return Response.ok(resultado).build();
+            List<mx.edu.uaa.model.UsuarioPerfil> alumnos = usuarioRepo.obtenerDirectorioAlumnos();
+            return Response.ok(alumnos).build();
         } catch (Exception e) {
             e.printStackTrace();
-            return Response.serverError().entity("{\"message\": \"Error al obtener usuarios\"}").build();
+            return Response.serverError().entity("{\"message\": \"Error al cargar alumnos\"}").build();
         }
     }
 
     // ==========================================
-    // OBTENER USUARIO POR NOMBRE O ID (GET)
+    // DIRECTORIO: PROFESORES
     // ==========================================
     @GET
-    @Path("/buscar/{dato}")
+    @Path("/directorio/profesores")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response obtenerUsuarioPublico(@PathParam("dato") String dato) {
+    public Response obtenerDirectorioProfesores() {
         try {
-            Usuario u = null;
-            try {
-                int id = Integer.parseInt(dato);
-                u = usuarioRepo.obtenerPorId(id);
-            } catch (NumberFormatException e) {
-                u = usuarioRepo.obtenerPorNombre(dato);
-            }
-
-            if (u != null) {
-                u.setPassword(null); // Seguridad
-                
-                // --- ¡LA MAGIA AQUÍ! ---
-                // Evita que el convertidor JSON explote y lance el 400 Bad Request
-                u.setIntereses(null); 
-                // -----------------------
-                
-                return Response.ok(u).build();
+            // Nota: Debes asegurar que este método exista en tu UsuarioRepository
+            List<mx.edu.uaa.model.UsuarioPerfil> profesores = usuarioRepo.obtenerDirectorioProfesores();
+            return Response.ok(profesores).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity("{\"message\": \"Error al cargar profesores\"}").build();
+        }
+    }
+    // ==========================================
+    // OBTENER USUARIO POR NOMBRE O ID (GET)
+    // ==========================================
+   // ==========================================
+    // OBTENER PERFIL DE USUARIO
+    // ==========================================
+    @GET
+    @Path("/{id}/perfil")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtenerPerfilUsuario(@PathParam("id") Integer idUsuario) {
+        try {
+            // Lee directamente de vista_usuario_perfil
+            mx.edu.uaa.model.UsuarioPerfil perfil = usuarioRepo.obtenerPerfilPublico(idUsuario);
+            
+            if (perfil != null) {
+                return Response.ok(perfil).build();
             } else {
-                return Response.status(Response.Status.NOT_FOUND).build();
+                return Response.status(Response.Status.NOT_FOUND).entity("{\"message\": \"Usuario no encontrado\"}").build();
             }
         } catch (Exception e) {
             return Response.serverError().build();

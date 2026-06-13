@@ -272,4 +272,27 @@ public class EventoResource {
                 .header("Content-Disposition", "inline; filename=\"" + nombreArchivo + "\"")
                 .build();
     }
+    @GET
+    @Path("/activos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtenerEventosActivos() {
+        try {
+            List<Evento> activos = repositorio.obtenerEventosActivos();
+            return Response.ok(activos).build();
+        } catch (Exception e) {
+            return Response.serverError().entity("{\"message\": \"Error al cargar eventos activos\"}").build();
+        }
+    }
+
+    @GET
+    @Path("/pasados")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtenerEventosPasados() {
+        try {
+            List<Evento> pasados = repositorio.obtenerEventosPasados();
+            return Response.ok(pasados).build();
+        } catch (Exception e) {
+            return Response.serverError().entity("{\"message\": \"Error al cargar eventos pasados\"}").build();
+        }
+    }
 }

@@ -4,6 +4,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 import mx.edu.uaa.model.Evento;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class EventoRepository {
@@ -95,6 +97,33 @@ public class EventoRepository {
                 em.getTransaction().rollback();
             }
             throw e;
+        } finally {
+            em.close();
+        }
+    }
+    // --- OBTENER EVENTOS ACTIVOS (Vigentes y Futuros) ---
+    public List<Evento> obtenerEventosActivos() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            // Consulta nativa a la vista del fragmento 1
+            return em.createNativeQuery("SELECT * FROM fragmento_eventos_activos", Evento.class).getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        } finally {
+            em.close();
+        }
+    }
+
+    // --- OBTENER EVENTOS PASADOS (Archivo Histórico) ---
+    public List<Evento> obtenerEventosPasados() {
+        EntityManager em = emf.createEntityManager();
+        try {
+            // Consulta nativa a la vista del fragmento 2
+            return em.createNativeQuery("SELECT * FROM fragmento_eventos_pasados", Evento.class).getResultList();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
         } finally {
             em.close();
         }
