@@ -7,6 +7,7 @@ import jakarta.persistence.NoResultException;
 import mx.edu.uaa.model.Usuario;
 import mx.edu.uaa.model.UsuarioAuth;
 import mx.edu.uaa.model.UsuarioPerfil;
+import org.bson.Document;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -233,4 +234,14 @@ public class UsuarioRepository {
         if (valor instanceof byte[]) return ((byte[]) valor)[0] == 1;
         return false;
     }
+    // Método para extraer números de forma segura, sin importar si Mongo los ve como Double o Integer
+    private Integer extraerEnteroSeguro(Document doc, String clave) {
+        Object valor = doc.get(clave);
+        if (valor == null) return null;
+        if (valor instanceof Number) {
+            return ((Number) valor).intValue();
+        }
+        return null;
+    }
+    
 }
