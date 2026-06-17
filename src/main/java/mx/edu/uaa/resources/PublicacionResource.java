@@ -49,7 +49,7 @@ public class PublicacionResource {
                 String base64String = convertirImagenABase64(fileInputStream, nombreOriginal);
                 listaRutas.add(base64String); // Guardamos la cadena gigante de texto
             }
-
+            
             // 3. Crear Objeto
             Publicacion p = new Publicacion();
             p.setTitulo(titulo);
@@ -59,6 +59,12 @@ public class PublicacionResource {
             p.setIntereses(intereses != null ? intereses : new ArrayList<>());
             p.setImagePaths(listaRutas);
             p.setIdComentarios(new ArrayList<>());
+            if (idEvento != null && idEvento > 0) {
+                mx.edu.uaa.model.Evento eventoSql = eventoRepo.obtenerPorId(idEvento);
+                if (eventoSql != null) {
+                    p.setNombreEvento(eventoSql.getTitulo()); // Asignamos el título real de MySQL
+                }
+            }
 
             // 4. Guardar en MongoDB
             Publicacion guardada = repo.guardar(p); 
@@ -181,5 +187,33 @@ public class PublicacionResource {
         else if (fileName.toLowerCase().endsWith(".webp")) mimeType = "image/webp";
 
         return "data:" + mimeType + ";base64," + base64Image;
+    }
+    @POST
+    @Path("/sincronizar-titulos-eventos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response sincronizarTitulosEventos() {
+        try {
+            // 1. Obtener todas las publicaciones desde MongoDB
+            List<Publicacion> todasLasPublicaciones = repo.obtenerTodas();
+            int modificados = 0;
+
+            for (Publicacion p : todasLasPublicaciones) {
+                // 2. Si la publicación está vinculada a un evento, buscamos su título en MySQL
+                if (p.getIdEvento() != null && p.getIdEvento() > 0) {
+                    mx.edu.uaa.model.Evento ev = eventoRepo.obtenerPorId(p.getIdEvento());
+                    
+                    if (ev != null) {
+                        // 3. Le inyectamos el nombre y actualizamos el documento en MongoDB
+                        p.setNombreEvento(ev.getTitulo());
+                        repo.actualizar(p);
+                        modificados++;
+                    }
+                }
+            }
+            return Response.ok("{\"message\": \"Sincronización de eventos exitosa.\", \"publicaciones_actualizadas\": " + modificados + "}").build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity("Error en la migración: " + e.getMessage()).build();
+        }
     }
 }

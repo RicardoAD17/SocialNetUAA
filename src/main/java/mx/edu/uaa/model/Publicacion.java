@@ -27,7 +27,16 @@ public class Publicacion {
     private String description;
     private List<String> imagePaths;
     private List<Integer> idComentarios;
+    private String nombreEvento;
 
+    // Getters y Setters
+    public String getNombreEvento() { 
+        return nombreEvento; 
+    }
+
+    public void setNombreEvento(String nombreEvento) { 
+        this.nombreEvento = nombreEvento; 
+    }
     // ==========================================
     // Constructores
     // ==========================================

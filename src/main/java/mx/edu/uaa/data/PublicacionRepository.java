@@ -35,8 +35,9 @@ public class PublicacionRepository {
         nuevaPublicacion.setIdPublicacion(nuevoId);
 
         // 2. Armamos el documento BSON manualmente
-        Document doc = new Document("idPublicacion", nuevaPublicacion.getIdPublicacion())
+                Document doc = new Document("idPublicacion", nuevaPublicacion.getIdPublicacion())
                 .append("idEvento", nuevaPublicacion.getIdEvento())
+                .append("nombreEvento", nuevaPublicacion.getNombreEvento()) // <-- Línea añadida
                 .append("titulo", nuevaPublicacion.getTitulo())
                 .append("idAutor", nuevaPublicacion.getIdAutor())
                 .append("description", nuevaPublicacion.getDescription())
@@ -111,8 +112,9 @@ public class PublicacionRepository {
 
     // --- ACTUALIZAR ---
     public void actualizar(Publicacion p) throws Exception {
-        Document doc = new Document("idPublicacion", p.getIdPublicacion())
+                Document doc = new Document("idPublicacion", p.getIdPublicacion())
                 .append("idEvento", p.getIdEvento())
+                .append("nombreEvento", p.getNombreEvento()) // <-- Línea añadida
                 .append("titulo", p.getTitulo())
                 .append("idAutor", p.getIdAutor())
                 .append("description", p.getDescription())
@@ -167,7 +169,9 @@ public class PublicacionRepository {
         p.setIdAutor(extraerEnteroSeguro(doc, "idAutor"));
         
         // El resto de tus campos (Strings, listas, fechas) se quedan igual
+       // ... (extracciones de IDs anteriores)
         p.setTitulo(doc.getString("titulo"));
+        p.setNombreEvento(doc.getString("nombreEvento")); // <-- Línea añadida
         p.setDescription(doc.getString("description"));
         p.setIntereses(obtenerListaEnteros(doc, "intereses"));
         p.setIdComentarios(obtenerListaEnteros(doc, "idComentarios"));
