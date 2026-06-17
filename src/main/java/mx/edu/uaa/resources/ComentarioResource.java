@@ -3,79 +3,85 @@ package mx.edu.uaa.resources;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import mx.edu.uaa.data.ComentarioRepository;
+import mx.edu.uaa.data.ComentarioMongoRepository;
 import mx.edu.uaa.data.PublicacionRepository;
 import mx.edu.uaa.data.UsuarioRepository;
-import mx.edu.uaa.model.Comentario;
+import mx.edu.uaa.model.ComentarioMongo;
 import mx.edu.uaa.model.Publicacion;
 
-// Importante: Para usar FormData
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 
+@Component // IMPORTANTE: Permite que Spring inyecte el repositorio de Mongo
 @Path("/comentarios")
 public class ComentarioResource {
 
-    private ComentarioRepository comentarioRepo = new ComentarioRepository();
+    // IMPORTANTE: Se inyecta la conexión a Mongo. ¡No usar 'new'!
+    @Autowired
+    private ComentarioMongoRepository comentarioMongoRepo;
+
     private PublicacionRepository publicacionRepo = new PublicacionRepository();
     private UsuarioRepository usuarioRepo = new UsuarioRepository();
 
     // ==========================================
-    // CREAR COMENTARIO (Con FormData)
+    // CREAR COMENTARIO (Guardar en MongoDB)
     // ==========================================
     @POST
-    @Path("/crear") // Agregamos /crear para ser consistentes con las otras clases
-    @Consumes(MediaType.MULTIPART_FORM_DATA) // <--- CAMBIO PRINCIPAL
+    @Path("/crear")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearComentario(
             @FormDataParam("idUsuario") Integer idUsuario,
             @FormDataParam("idPublicacion") Integer idPublicacion,
-            @FormDataParam("idComentarioPadre") Integer idComentarioPadre, // Puede ser nulo
+            @FormDataParam("idComentarioPadre") Integer idComentarioPadre,
             @FormDataParam("descripcion") String descripcion
     ) {
         try {
-            // 1. Validaciones básicas
             if (idUsuario == null || idPublicacion == null || descripcion == null || descripcion.isEmpty()) {
                 return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"message\": \"Faltan datos obligatorios (usuario, publicacion o descripcion)\"}").build();
+                        .entity("{\"message\": \"Faltan datos obligatorios\"}").build();
             }
 
-            // 2. Validar Existencia de Usuario
             if (usuarioRepo.obtenerPorId(idUsuario) == null) {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity("{\"message\": \"El usuario no existe\"}").build();
             }
 
-            // 3. Validar Existencia de Publicación
             Publicacion publicacion = publicacionRepo.obtenerPorId(idPublicacion);
             if (publicacion == null) {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity("{\"message\": \"La publicación no existe\"}").build();
             }
 
-            // 4. Crear el Objeto Manualmente
-            Comentario c = new Comentario();
+            // 1. Crear el Documento de Mongo
+            ComentarioMongo c = new ComentarioMongo();
+            
+            // Generamos un ID numérico pseudo-aleatorio para mantener compatibilidad con la lista de MySQL
+            int idGenerado = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+            c.setIdComentario(idGenerado);
+            
             c.setIdUsuario(idUsuario);
             c.setIdPublicacion(idPublicacion);
             c.setDescripcion(descripcion);
+            c.setFechaComentario(LocalDateTime.now()); // Guardamos la fecha exacta del sistema
             
-            // Si mandan 0 o vacío, lo dejamos como null (comentario principal)
             if (idComentarioPadre != null && idComentarioPadre > 0) {
                 c.setIdComentarioPadre(idComentarioPadre);
-            } else {
-                c.setIdComentarioPadre(null);
             }
 
-            // 5. Guardar en el Repositorio (Aquí se genera el ID y la Fecha)
-            Comentario guardado = comentarioRepo.guardar(c);
+            // 2. Guardar en MongoDB usando el método heredado 'save'
+            ComentarioMongo guardado = comentarioMongoRepo.save(c);
 
-            // 6. Actualizar la referencia en la Publicación
+            // 3. Actualizar la referencia en la Publicación (MySQL)
             if (publicacion.getIdComentarios() == null) {
                 publicacion.setIdComentarios(new ArrayList<>());
             }
             publicacion.getIdComentarios().add(guardado.getIdComentario());
-            publicacionRepo.actualizar(publicacion); // Guardar cambio en publicacion.json
+            publicacionRepo.actualizar(publicacion); 
 
             return Response.ok(guardado).build();
 
@@ -86,57 +92,51 @@ public class ComentarioResource {
     }
 
     // ==========================================
-    // OBTENER COMENTARIOS (GET)
+    // OBTENER COMENTARIOS (Leer de MongoDB)
     // ==========================================
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response obtenerComentarios(@QueryParam("idPublicacion") Integer idPublicacion) {
         try {
             if (idPublicacion == null) {
-                return Response.ok(comentarioRepo.obtenerTodos()).build();
+                // findAll() es nativo de MongoRepository
+                return Response.ok(comentarioMongoRepo.findAll()).build();
             }
-            return Response.ok(comentarioRepo.obtenerPorPublicacion(idPublicacion)).build();
+            // Utilizamos el método personalizado que creamos
+            return Response.ok(comentarioMongoRepo.findByIdPublicacion(idPublicacion)).build();
         } catch (Exception e) {
             return Response.serverError().build();
         }
     }
-	// ==========================================
-    // ELIMINAR COMENTARIO (DELETE)
+
+    // ==========================================
+    // ELIMINAR COMENTARIO (Borrar de MongoDB)
     // ==========================================
     @DELETE
     @Path("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response eliminarComentario(@PathParam("id") Integer id) {
         try {
-            // 1. Buscar el comentario antes de borrarlo (para saber de qué publicación es)
-            Comentario c = comentarioRepo.obtenerPorId(id);
+            // 1. Buscar el comentario en Mongo
+            ComentarioMongo c = comentarioMongoRepo.findByIdComentario(id).orElse(null);
             
             if (c == null) {
                 return Response.status(Response.Status.NOT_FOUND)
                         .entity("{\"message\": \"El comentario no existe\"}").build();
             }
 
-            // 2. Borrar el comentario (y sus respuestas) del repositorio
-            boolean borrado = comentarioRepo.eliminar(id);
+            // 2. Borrar de Mongo
+            comentarioMongoRepo.deleteByIdComentario(id);
 
-            if (borrado) {
-                // 3. ACTUALIZAR LA PUBLICACIÓN (Limpieza de referencia)
-                // Obtenemos la publicación padre
-                mx.edu.uaa.model.Publicacion publicacion = publicacionRepo.obtenerPorId(c.getIdPublicacion());
-                
-                if (publicacion != null && publicacion.getIdComentarios() != null) {
-                    // Removemos el ID de la lista de la publicación
-                    // Ojo: Casteamos a (Object) para que remueva el elemento, no el índice
-                    publicacion.getIdComentarios().remove((Object) id);
-                    
-                    // Guardamos la publicación actualizada
-                    publicacionRepo.actualizar(publicacion);
-                }
-
-                return Response.ok("{\"message\": \"Comentario eliminado correctamente\"}").build();
+            // 3. ACTUALIZAR LA PUBLICACIÓN (Limpiar referencia)
+            Publicacion publicacion = publicacionRepo.obtenerPorId(c.getIdPublicacion());
+            
+            if (publicacion != null && publicacion.getIdComentarios() != null) {
+                publicacion.getIdComentarios().remove((Object) id);
+                publicacionRepo.actualizar(publicacion);
             }
 
-            return Response.serverError().entity("{\"message\": \"No se pudo eliminar\"}").build();
+            return Response.ok("{\"message\": \"Comentario fragmentado eliminado correctamente\"}").build();
 
         } catch (Exception e) {
             e.printStackTrace();
