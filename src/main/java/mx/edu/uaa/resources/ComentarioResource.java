@@ -3,32 +3,43 @@ package mx.edu.uaa.resources;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import mx.edu.uaa.data.ComentarioMongoRepository;
+import mx.edu.uaa.data.ComentarioRepository;
 import mx.edu.uaa.data.PublicacionRepository;
 import mx.edu.uaa.data.UsuarioRepository;
-import mx.edu.uaa.model.ComentarioMongo;
+import mx.edu.uaa.model.Comentario;
 import mx.edu.uaa.model.Publicacion;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
+// Importaciones nativas de MongoDB
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import org.bson.Document;
 
-@Component // IMPORTANTE: Permite que Spring inyecte el repositorio de Mongo
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
+
 @Path("/comentarios")
 public class ComentarioResource {
 
-    // IMPORTANTE: Se inyecta la conexión a Mongo. ¡No usar 'new'!
-    @Autowired
-    private ComentarioMongoRepository comentarioMongoRepo;
-
+    // Repositorios de MySQL
+    private ComentarioRepository sqlRepo = new ComentarioRepository();
     private PublicacionRepository publicacionRepo = new PublicacionRepository();
     private UsuarioRepository usuarioRepo = new UsuarioRepository();
 
     // ==========================================
-    // CREAR COMENTARIO (Guardar en MongoDB)
+    // CONEXIÓN NATIVA A MONGODB (Para Metabase)
+    // ==========================================
+    private static final String URI_MONGODB = "mongodb://172.25.219.232:27017";
+    private static final MongoClient mongoClient = MongoClients.create(URI_MONGODB);
+    private static final MongoDatabase database = mongoClient.getDatabase("socialnet_db");
+    private static final MongoCollection<Document> mongoCollection = database.getCollection("comentarios");
+
+    // ==========================================
+    // CREAR COMENTARIO (Guarda en MySQL y MongoDB)
     // ==========================================
     @POST
     @Path("/crear")
@@ -57,33 +68,37 @@ public class ComentarioResource {
                         .entity("{\"message\": \"La publicación no existe\"}").build();
             }
 
-            // 1. Crear el Documento de Mongo
-            ComentarioMongo c = new ComentarioMongo();
-            
-            // Generamos un ID numérico pseudo-aleatorio para mantener compatibilidad con la lista de MySQL
-            int idGenerado = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
-            c.setIdComentario(idGenerado);
-            
-            c.setIdUsuario(idUsuario);
-            c.setIdPublicacion(idPublicacion);
-            c.setDescripcion(descripcion);
-            c.setFechaComentario(LocalDateTime.now()); // Guardamos la fecha exacta del sistema
-            
+            // 1. GUARDAR EN MYSQL (Fuente principal de la aplicación)
+            Comentario sqlComentario = new Comentario();
+            sqlComentario.setIdUsuario(idUsuario);
+            sqlComentario.setIdPublicacion(idPublicacion);
+            sqlComentario.setDescripcion(descripcion);
             if (idComentarioPadre != null && idComentarioPadre > 0) {
-                c.setIdComentarioPadre(idComentarioPadre);
+                sqlComentario.setIdComentarioPadre(idComentarioPadre);
             }
+            // MySQL nos devuelve el objeto ya con el ID Autoincrementable y la Fecha generada
+            Comentario guardadoSQL = sqlRepo.guardar(sqlComentario);
 
-            // 2. Guardar en MongoDB usando el método heredado 'save'
-            ComentarioMongo guardado = comentarioMongoRepo.save(c);
+            // 2. GUARDAR EN MONGODB (Nutrir el Dashboard de Metabase)
+            Document mongoDoc = new Document("idComentario", guardadoSQL.getIdComentario())
+                    .append("idUsuario", guardadoSQL.getIdUsuario())
+                    .append("idPublicacion", guardadoSQL.getIdPublicacion())
+                    .append("idComentarioPadre", guardadoSQL.getIdComentarioPadre())
+                    .append("descripcion", guardadoSQL.getDescripcion())
+                    // Convertir LocalDateTime a Date nativo de Mongo
+                    .append("fechaComentario", Date.from(guardadoSQL.getFechaComentario().atZone(ZoneId.systemDefault()).toInstant()));
+            
+            mongoCollection.insertOne(mongoDoc);
 
-            // 3. Actualizar la referencia en la Publicación (MySQL)
+            // 3. ACTUALIZAR LA REFERENCIA EN LA PUBLICACIÓN (MongoDB)
             if (publicacion.getIdComentarios() == null) {
                 publicacion.setIdComentarios(new ArrayList<>());
             }
-            publicacion.getIdComentarios().add(guardado.getIdComentario());
+            publicacion.getIdComentarios().add(guardadoSQL.getIdComentario());
             publicacionRepo.actualizar(publicacion); 
 
-            return Response.ok(guardado).build();
+            // Devolvemos el objeto MySQL a Angular
+            return Response.ok(guardadoSQL).build();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -92,51 +107,52 @@ public class ComentarioResource {
     }
 
     // ==========================================
-    // OBTENER COMENTARIOS (Leer de MongoDB)
+    // OBTENER COMENTARIOS (Lee de MySQL)
     // ==========================================
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response obtenerComentarios(@QueryParam("idPublicacion") Integer idPublicacion) {
         try {
+            // Leemos de MySQL porque es más rápido y seguro para el frontend
             if (idPublicacion == null) {
-                // findAll() es nativo de MongoRepository
-                return Response.ok(comentarioMongoRepo.findAll()).build();
+                return Response.ok(sqlRepo.obtenerTodos()).build();
             }
-            // Utilizamos el método personalizado que creamos
-            return Response.ok(comentarioMongoRepo.findByIdPublicacion(idPublicacion)).build();
+            return Response.ok(sqlRepo.obtenerPorPublicacion(idPublicacion)).build();
         } catch (Exception e) {
-            return Response.serverError().build();
+            e.printStackTrace();
+            return Response.serverError().entity("Error al obtener comentarios: " + e.getMessage()).build();
         }
     }
 
     // ==========================================
-    // ELIMINAR COMENTARIO (Borrar de MongoDB)
+    // ELIMINAR COMENTARIO (Borra en ambas DBs)
     // ==========================================
     @DELETE
     @Path("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response eliminarComentario(@PathParam("id") Integer id) {
         try {
-            // 1. Buscar el comentario en Mongo
-            ComentarioMongo c = comentarioMongoRepo.findByIdComentario(id).orElse(null);
-            
+            // 1. Buscar en MySQL
+            Comentario c = sqlRepo.obtenerPorId(id);
             if (c == null) {
                 return Response.status(Response.Status.NOT_FOUND)
                         .entity("{\"message\": \"El comentario no existe\"}").build();
             }
 
-            // 2. Borrar de Mongo
-            comentarioMongoRepo.deleteByIdComentario(id);
+            // 2. Borrar de MySQL
+            sqlRepo.eliminar(id);
 
-            // 3. ACTUALIZAR LA PUBLICACIÓN (Limpiar referencia)
+            // 3. Borrar de MongoDB (Metabase)
+            mongoCollection.deleteOne(Filters.eq("idComentario", id));
+
+            // 4. ACTUALIZAR LA PUBLICACIÓN (Limpiar referencia)
             Publicacion publicacion = publicacionRepo.obtenerPorId(c.getIdPublicacion());
-            
             if (publicacion != null && publicacion.getIdComentarios() != null) {
                 publicacion.getIdComentarios().remove((Object) id);
                 publicacionRepo.actualizar(publicacion);
             }
 
-            return Response.ok("{\"message\": \"Comentario fragmentado eliminado correctamente\"}").build();
+            return Response.ok("{\"message\": \"Comentario eliminado de MySQL y MongoDB correctamente\"}").build();
 
         } catch (Exception e) {
             e.printStackTrace();
