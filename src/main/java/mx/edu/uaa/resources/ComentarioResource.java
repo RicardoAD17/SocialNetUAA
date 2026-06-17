@@ -159,4 +159,53 @@ public class ComentarioResource {
             return Response.serverError().entity("Error: " + e.getMessage()).build();
         }
     }
+    // ==========================================
+    // SINCRONIZAR COMENTARIOS VIEJOS (MySQL -> MongoDB)
+    // ==========================================
+    @POST
+    @Path("/sincronizar-antiguos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response sincronizarAntiguos() {
+        try {
+            // 1. Obtener todos los comentarios antiguos de MySQL
+            List<Comentario> viejos = sqlRepo.obtenerTodos();
+            int procesados = 0;
+
+            for (Comentario c : viejos) {
+                // Verificar si el comentario ya existe en Mongo para no duplicarlo
+                Document existe = mongoCollection.find(Filters.eq("idComentario", c.getIdComentario())).first();
+                
+                if (existe == null) {
+                    // 2. Insertarlo en MongoDB para que Metabase lo pueda leer
+                    Document mongoDoc = new Document("idComentario", c.getIdComentario())
+                            .append("idUsuario", c.getIdUsuario())
+                            .append("idPublicacion", c.getIdPublicacion())
+                            .append("idComentarioPadre", c.getIdComentarioPadre())
+                            .append("descripcion", c.getDescripcion())
+                            .append("fechaComentario", Date.from(c.getFechaComentario().atZone(ZoneId.systemDefault()).toInstant()));
+                    
+                    mongoCollection.insertOne(mongoDoc);
+                    procesados++;
+                    
+                    // 3. Vincularlo a la Publicación en MongoDB para que Angular lo detecte
+                    Publicacion pub = publicacionRepo.obtenerPorId(c.getIdPublicacion());
+                    if (pub != null) {
+                        if (pub.getIdComentarios() == null) {
+                            pub.setIdComentarios(new ArrayList<>());
+                        }
+                        // Solo agregamos el ID si no está ya en la lista
+                        if (!pub.getIdComentarios().contains(c.getIdComentario())) {
+                            pub.getIdComentarios().add(c.getIdComentario());
+                            publicacionRepo.actualizar(pub);
+                        }
+                    }
+                }
+            }
+            return Response.ok("{\"message\": \"Sincronización completa. Comentarios copiados a MongoDB y vinculados: " + procesados + "\"}").build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.serverError().entity("Error en la sincronización: " + e.getMessage()).build();
+        }
+    }
 }
