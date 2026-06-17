@@ -84,28 +84,22 @@ public class PublicacionRepository {
     }
 
     // --- OBTENER POR EVENTO ---
+   // --- OBTENER POR EVENTO (CORREGIDO) ---
     public List<Publicacion> obtenerPorEvento(Integer idEvento) throws Exception {
         List<Publicacion> lista = new ArrayList<>();
-        for (Document doc : collection.find()) {
-            try {
-                lista.add(mapearDocumentoAObjeto(doc));
-            } catch (Exception e) {
-                System.err.println(" Error procesando la publicación en obtenerPorEvento.");
-            }
+        // Ahora sí filtramos desde MongoDB
+        for (Document doc : collection.find(Filters.eq("idEvento", idEvento))) {
+            lista.add(mapearDocumentoAObjeto(doc));
         }
         return lista;
     }
 
-    // --- OBTENER POR INTERÉS ---
+    // --- OBTENER POR INTERÉS (CORREGIDO) ---
     public List<Publicacion> obtenerPorInteres(Integer idInteres) throws Exception {
         List<Publicacion> lista = new ArrayList<>();
-        // Magia de MongoDB: Sabe buscar dentro de arreglos automáticamente
-        for (Document doc : collection.find()) {
-            try {
-                lista.add(mapearDocumentoAObjeto(doc));
-            } catch (Exception e) {
-                System.err.println(" Error procesando la publicación en obtenerPorInteres.");
-            }
+        // MongoDB busca automáticamente si el idInteres está dentro del arreglo "intereses"
+        for (Document doc : collection.find(Filters.in("intereses", idInteres))) {
+            lista.add(mapearDocumentoAObjeto(doc));
         }
         return lista;
     }
